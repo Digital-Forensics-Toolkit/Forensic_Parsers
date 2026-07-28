@@ -1,0 +1,1 @@
+python3 volatility3/framework/symbols/windows/pdbconv.py -p ntkrnlmp.pdb -g D7AA3EA411035658322C4E4434528E30-1
