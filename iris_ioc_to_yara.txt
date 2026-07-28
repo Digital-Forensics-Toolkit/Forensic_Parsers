@@ -1,0 +1,36 @@
+What the script does
+
+It's a small command-line tool that connects to your DFIR-IRIS instance, lets you pick one of your existing cases, pulls down all the IOCs (Indicators of Compromise) logged in that case, and automatically converts them into a YARA rule file (.yar) you can load into scanning/detection tools.
+
+Walkthrough of the functions
+
+Config / connection
+
+get_config() — prompts for the IRIS URL and API key, with basic input validation (won't accept blank fields or malformed URLs).
+
+Talking to the IRIS API
+
+api_get() — a small wrapper around requests.get() that adds the Bearer token auth header, checks the HTTP response, and confirms IRIS returned a "success" status before handing back the data.
+list_cases() — calls IRIS's /manage/cases/list endpoint to get every case you have access to.
+list_iocs() — calls /case/ioc/list for a specific case ID and returns all IOCs attached to it.
+
+IOC type detection (a set of small helper functions)
+
+is_ipv4(), is_ipv6(), is_domain(), is_md5(), is_sha1(), is_sha256(), is_url() — each checks whether a given IOC value matches that type's format, so the script knows how to treat it.
+ipv4_to_hex() / ipv6_to_hex() — converts an IP address into its raw byte representation, used to build a binary-pattern YARA string (catches the IP if it shows up as packed bytes in memory/traffic, not just as text).
+
+Building the YARA rule
+
+sanitize_rule_name() — turns an IOC value into a name that's valid as a YARA rule identifier (strips out special characters).
+build_yara_rule() — the core logic. For each IOC it generates a YARA rule with multiple string variants (ASCII, UTF-16/"wide", and — for IPs — raw hex bytes), so the rule can catch the indicator whether it appears as plain text or as some binary data. Falls back to a generic ASCII/wide string match for anything it doesn't recognize (emails, filenames, etc.).
+
+Main flow
+
+main() — ties it all together: connect → list cases → let you pick one → pull its IOCs → print them for review → generate a rule for each → concatenate everything into one .yar bundle named after the case → save it locally.
+Why this is useful
+
+Instead of manually re-typing IOCs from a case into YARA syntax one at a time, this automates the whole conversion — pulling straight from the source of truth (IRIS) and producing ready-to-deploy detection rules in seconds. It cuts down on transcription errors and lets your team turn case IOCs into active detections much faster.
+
+Access it needs
+
+Just read access to IRIS's case list and IOC list endpoints via the API key you're requesting — it doesn't write, modify, or delete anything in IRIS.
