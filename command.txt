@@ -1,2 +1,3 @@
 python3 volatility3/framework/symbols/windows/pdbconv.py -p ntkrnlmp.pdb -g D7AA3EA411035658322C4E4434528E30-1
 curl -v http://msdl.microsoft.com/download/symbols/ntkrnlmp.pdb/D7AA3EA411035658322C4E4434528E30-1/ntkrnlmp.pdb -o test.pdb
+curl -L "http://msdl.microsoft.com/download/symbols/ntkrnlmp.pdb/D7AA3EA411035658322C4E4434528E301/ntkrnlmp.pdb" -o ntkrnlmp.pdb
