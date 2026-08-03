@@ -54,3 +54,6 @@ perl -ne '
     print join(",", @fields), "\n";
   ' scan.txt
 } > results.csv
+
+
+=DATEVALUE(TRIM(MID(SUBSTITUTE(D2,"  "," "),5,7))&" "&RIGHT(D2,4)) + TIMEVALUE(MID(D2,FIND(":",D2)-2,8))
