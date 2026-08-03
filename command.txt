@@ -14,3 +14,14 @@ awk '
 ' scan.txt
 
 grep 'FILE:' scan.txt | grep -oE "FILE: '[^']*'|MD5: [a-f0-9]*|CHANGED: [^ ]*( [^ ]*)?|MODIFIED: [^ ]*( [^ ]*)?"
+
+
+
+perl -ne '
+  my ($file)     = /FILE: (.*?) EXT:/;
+  my ($md5)      = /MD5: (\S+)/;
+  my ($changed)  = /CHANGED: (.*?) MODIFIED:/;
+  my ($modified) = /MODIFIED: (.*?) ACCESSED:/;
+  my ($str1)     = /Str1: "(.*?)" at /;
+  print "$file\t$md5\t$changed\t$modified\t$str1\n" if $file;
+' scan.txt
