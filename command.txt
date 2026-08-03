@@ -25,3 +25,32 @@ perl -ne '
   my ($str1)     = /Str1: "(.*?)" at /;
   print "$file\t$md5\t$changed\t$modified\t$str1\n" if $file;
 ' scan.txt
+
+
+{
+  echo "FILE,MD5,CHANGED,MODIFIED,STRINGS"
+  perl -ne '
+    my ($file)     = /FILE: (.*?) EXT:/;
+    next unless $file;
+
+    my ($md5)      = /MD5: (\S+)/;
+    my ($changed)  = /CHANGED: (.*?) MODIFIED:/;
+    my ($modified) = /MODIFIED: (.*?) ACCESSED:/;
+
+    my @strs;
+    while (/Str\d+: "(.*?)" at /g) {
+      push @strs, $1;
+    }
+    my $strs_joined = join("; ", @strs);
+
+    my @fields = ($file, $md5, $changed, $modified, $strs_joined);
+    for (@fields) {
+      $_ = "" unless defined $_;
+      if (/[",\n]/) {
+        s/"/""/g;
+        $_ = qq("$_");
+      }
+    }
+    print join(",", @fields), "\n";
+  ' scan.txt
+} > results.csv
