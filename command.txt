@@ -3,17 +3,12 @@ curl -v http://msdl.microsoft.com/download/symbols/ntkrnlmp.pdb/D7AA3EA411035658
 curl -L "http://msdl.microsoft.com/download/symbols/ntkrnlmp.pdb/D7AA3EA411035658322C4E4434528E301/ntkrnlmp.pdb" -o ntkrnlmp.pdb
 
 awk '
-/^FILE:/ {
-    if (file)
-        print file "," md5 "," changed "," modified
-    file=$0
-    md5=changed=modified=""
+/FILE:/ {
+    file = ""; md5 = ""; changed = ""; modified = ""
+    if (match($0, /FILE: '\''[^'\'']*'\''/))     file     = substr($0, RSTART+7, RLENGTH-8)
+    if (match($0, /MD5: [a-f0-9]+/))             md5      = substr($0, RSTART+5, RLENGTH-5)
+    if (match($0, /CHANGED: [^ ]+ [^ ]+/))       changed  = substr($0, RSTART+9, RLENGTH-9)
+    if (match($0, /MODIFIED: [^ ]+ [^ ]+/))      modified = substr($0, RSTART+10, RLENGTH-10)
+    print file "\t" md5 "\t" changed "\t" modified
 }
-/^MD5:/      {md5=$0}
-/^CHANGED:/  {changed=$0}
-/^MODIFIED:/ {modified=$0}
-END {
-    if (file)
-        print file "," md5 "," changed "," modified
-}
-' thor-lite.txt
+' scan.txt
