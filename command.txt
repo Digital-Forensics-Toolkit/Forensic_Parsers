@@ -12,3 +12,5 @@ awk '
     print file "\t" md5 "\t" changed "\t" modified
 }
 ' scan.txt
+
+grep 'FILE:' scan.txt | grep -oE "FILE: '[^']*'|MD5: [a-f0-9]*|CHANGED: [^ ]*( [^ ]*)?|MODIFIED: [^ ]*( [^ ]*)?"
