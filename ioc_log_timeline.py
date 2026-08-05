@@ -8,7 +8,9 @@ compatible timeline CSV, ready to import.
 
 For every line that contains one or more IOCs:
   - event_raw      <- the full raw log line
-  - event_iocs     <- the IOC(s) that matched, semicolon-separated
+  - event_iocs     <- the IOC(s) that matched, pipe-separated (e.g. IOC1|IOC2)
+                       -- DFIR-IRIS's CSV importer only recognizes "," or "|"
+                       as the multi-value delimiter for event_iocs/event_assets.
   - event_date     <- the timestamp parsed from the line (millisecond precision,
                        e.g. 2026-07-15T18:02:15.930)
   - event_tz       <- "+00:00" (assumes all source logs are UTC)
@@ -196,8 +198,8 @@ def process_file(filepath, matchers, rows, needs_review, asset="", event_source=
                     "event_content": "",
                     "event_raw": line,
                     "event_source": event_source,
-                    "event_assets": (asset + ";") if asset else "",
-                    "event_iocs": ";".join(hits) + ";",
+                    "event_assets": asset,
+                    "event_iocs": "|".join(hits),
                     "event_tags": "",
                 })
     except Exception as e:
