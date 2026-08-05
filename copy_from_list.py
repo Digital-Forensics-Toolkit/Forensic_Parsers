@@ -19,12 +19,28 @@ Options:
     --preserve-structure
                 Recreate each file's original absolute path under --dest
                 instead of flattening (avoids collisions entirely).
+    --by-host   Copy into --dest/<hostname>/<filename>, where <hostname> is
+                extracted from the source path itself (the folder name
+                right after the third "/", e.g. /mnt/IOC_SCAN/<hostname>/...).
+                Collisions are only checked within the same host's subfolder.
+                This is the mode to use if you want ioc_log_timeline.py to
+                auto-fill the linked_assets column.
 """
 
 import argparse
 import os
 import shutil
 import sys
+
+
+def extract_hostname(path):
+    """Pull the folder name right after the third '/' in an absolute path,
+    e.g. /mnt/IOC_SCAN/<hostname>/evidence/file.log -> <hostname>."""
+    parts = path.split("/")
+    # parts[0] is '' (leading slash), so the segment after the 3rd '/' is parts[3]
+    if len(parts) > 3 and parts[3]:
+        return parts[3]
+    return "unknown_host"
 
 
 def unique_destination(dest_dir, filename):
@@ -50,7 +66,14 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Show actions without copying anything.")
     ap.add_argument("--preserve-structure", action="store_true",
                      help="Recreate original absolute paths under --dest instead of flattening.")
+    ap.add_argument("--by-host", action="store_true",
+                     help="Copy into --dest/<hostname>/<filename>, hostname taken from the "
+                          "source path's segment after the third '/'.")
     args = ap.parse_args()
+
+    if args.preserve_structure and args.by_host:
+        print("[!] --preserve-structure and --by-host are mutually exclusive.", file=sys.stderr)
+        sys.exit(1)
 
     if not os.path.isfile(args.path_list):
         print(f"[!] Path list not found: {args.path_list}", file=sys.stderr)
@@ -83,6 +106,12 @@ def main():
             # then recreate the full original path under dest.
             rel = src.lstrip("/\\").replace(":", "")  # windows drive letter safety
             dst = os.path.join(args.dest, rel)
+        elif args.by_host:
+            hostname = extract_hostname(src)
+            host_dir = os.path.join(args.dest, hostname)
+            if not args.dry_run:
+                os.makedirs(host_dir, exist_ok=True)
+            dst = unique_destination(host_dir, os.path.basename(src))
         else:
             dst = unique_destination(args.dest, os.path.basename(src))
 
