@@ -7,16 +7,22 @@ SharePoint ULS, syslog-style, etc.) for IOC hits and builds a DFIR-IRIS
 compatible timeline CSV, ready to import.
 
 For every line that contains one or more IOCs:
-  - event_description  <- the full raw log line
-  - linked_iocs         <- the IOC(s) that matched, semicolon-separated
-  - event_date(UTC) and event_date_wtz <- the timestamp parsed from the line
-  - event_tz            <- "+00:00" (assumes all source logs are UTC)
-  - linked_assets       <- the hostname, IF the file lives in a per-host
-    subfolder directly under --logs-dir (i.e. you copied files over with
-    copy_from_list.py's --by-host flag). Files sitting directly in
-    --logs-dir with no host subfolder leave this blank.
-  - event_title, event_category, event_tags, created_by, creation_date are
-    left blank for manual completion in IRIS.
+  - event_raw      <- the full raw log line
+  - event_iocs     <- the IOC(s) that matched, semicolon-separated
+  - event_date     <- the timestamp parsed from the line (millisecond precision,
+                       e.g. 2026-07-15T18:02:15.930)
+  - event_tz       <- "+00:00" (assumes all source logs are UTC)
+  - event_source   <- the ORIGINAL absolute path of the file the line came
+                       from (before it was copied locally), read from a
+                       _copy_manifest.csv written by copy_from_list.py. If no
+                       manifest is found under --logs-dir, this falls back to
+                       the path of the file as scanned (see console output --
+                       Claude will warn you if it had to fall back).
+  - event_assets   <- the hostname, IF the file lives in a per-host subfolder
+                       directly under --logs-dir (i.e. copy_from_list.py's
+                       --by-host flag was used). Otherwise left blank.
+  - event_title, event_category, event_content, event_tags are left blank
+    for manual completion in IRIS.
 
 Timestamp detection order (first match wins, per line):
   1. If the file has an IIS W3C "#Fields:" header, use the declared
@@ -43,18 +49,19 @@ import re
 import sys
 from datetime import datetime, timezone
 
+MANIFEST_NAME = "_copy_manifest.csv"
+
 IRIS_FIELDS = [
-    "event_date(UTC)",
-    "event_title",
-    "event_description",
+    "event_date",
     "event_tz",
-    "event_date_wtz",
+    "event_title",
     "event_category",
+    "event_content",
+    "event_raw",
+    "event_source",
+    "event_assets",
+    "event_iocs",
     "event_tags",
-    "linked_assets",
-    "linked_iocs",
-    "created_by",
-    "creation_date",
 ]
 
 # --- Generic timestamp patterns, tried in order if IIS header isn't present ---
@@ -109,7 +116,8 @@ def parse_generic_timestamp(line):
 
 
 def format_iris_timestamp(dt):
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")
+    # Millisecond precision (3 digits), e.g. 2026-07-15T18:02:15.930
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}"
 
 
 class IISHeaderState:
@@ -151,7 +159,7 @@ class IISHeaderState:
         return None
 
 
-def process_file(filepath, matchers, rows, needs_review, asset=""):
+def process_file(filepath, matchers, rows, needs_review, asset="", event_source=""):
     iis = IISHeaderState()
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
@@ -181,17 +189,16 @@ def process_file(filepath, matchers, rows, needs_review, asset=""):
                     event_date = format_iris_timestamp(dt)
 
                 rows.append({
-                    "event_date(UTC)": event_date,
-                    "event_title": "",
-                    "event_description": line,
+                    "event_date": event_date,
                     "event_tz": "+00:00",
-                    "event_date_wtz": event_date,
+                    "event_title": "",
                     "event_category": "",
+                    "event_content": "",
+                    "event_raw": line,
+                    "event_source": event_source,
+                    "event_assets": (asset + ";") if asset else "",
+                    "event_iocs": ";".join(hits) + ";",
                     "event_tags": "",
-                    "linked_assets": (asset + ";") if asset else "",
-                    "linked_iocs": ";".join(hits) + ";",
-                    "created_by": "",
-                    "creation_date": "",
                 })
     except Exception as e:
         print(f"[!] Failed to read {filepath}: {e}", file=sys.stderr)
@@ -220,30 +227,58 @@ def main():
     exclude = {os.path.abspath(args.ioc_file), os.path.abspath(args.output)}
     logs_dir_abs = os.path.abspath(args.logs_dir)
 
+    # Load the copy manifest (copied_path -> original_path) if copy_from_list.py
+    # produced one. Its own filename is always excluded from scanning.
+    manifest = {}
+    manifest_path = os.path.join(args.logs_dir, MANIFEST_NAME)
+    exclude.add(os.path.abspath(manifest_path))
+    if os.path.isfile(manifest_path):
+        with open(manifest_path, "r", newline="", encoding="utf-8", errors="replace") as mf:
+            for row in csv.DictReader(mf):
+                cp = row.get("copied_path")
+                op = row.get("original_path")
+                if cp and op:
+                    manifest[os.path.abspath(cp)] = op
+        print(f"[*] Loaded manifest: {manifest_path} ({len(manifest)} entries)")
+    else:
+        print(f"[*] No manifest found at {manifest_path} -- event_source will use "
+              f"the scanned file path instead of the original source path.")
+
     # Walk recursively so per-host subfolders (e.g. from copy_from_list.py's
     # --by-host mode) are picked up. A file directly under --logs-dir has no
     # host subfolder and gets asset="".
-    files_with_asset = []
+    files_with_meta = []
+    fallback_count = 0
     for root, _dirs, filenames in os.walk(args.logs_dir):
         for fname in sorted(filenames):
             fp = os.path.join(root, fname)
-            if os.path.abspath(fp) in exclude:
+            fp_abs = os.path.abspath(fp)
+            if fp_abs in exclude:
                 continue
             rel = os.path.relpath(root, logs_dir_abs)
             asset = "" if rel == "." else rel.split(os.sep)[0]
-            files_with_asset.append((fp, asset))
+            if fp_abs in manifest:
+                event_source = manifest[fp_abs]
+            else:
+                event_source = fp_abs
+                fallback_count += 1
+            files_with_meta.append((fp, asset, event_source))
 
-    if not files_with_asset:
+    if not files_with_meta:
         print(f"[!] No files found in {args.logs_dir}", file=sys.stderr)
         sys.exit(1)
 
+    if manifest and fallback_count:
+        print(f"[!] {fallback_count} file(s) had no manifest entry -- their event_source "
+              f"is the scanned path, not the original source path.")
+
     print(f"[*] Loaded {len(iocs)} IOC(s)")
-    print(f"[*] Scanning {len(files_with_asset)} file(s) under {args.logs_dir}")
+    print(f"[*] Scanning {len(files_with_meta)} file(s) under {args.logs_dir}")
 
     rows = []
     needs_review = []
-    for fp, asset in files_with_asset:
-        process_file(fp, matchers, rows, needs_review, asset=asset)
+    for fp, asset, event_source in files_with_meta:
+        process_file(fp, matchers, rows, needs_review, asset=asset, event_source=event_source)
 
     with open(args.output, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=IRIS_FIELDS, quoting=csv.QUOTE_ALL)
