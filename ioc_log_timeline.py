@@ -11,8 +11,12 @@ For every line that contains one or more IOCs:
   - linked_iocs         <- the IOC(s) that matched, semicolon-separated
   - event_date(UTC) and event_date_wtz <- the timestamp parsed from the line
   - event_tz            <- "+00:00" (assumes all source logs are UTC)
-  - event_title, event_category, event_tags, linked_assets, created_by,
-    creation_date are left blank for manual completion in IRIS.
+  - linked_assets       <- the hostname, IF the file lives in a per-host
+    subfolder directly under --logs-dir (i.e. you copied files over with
+    copy_from_list.py's --by-host flag). Files sitting directly in
+    --logs-dir with no host subfolder leave this blank.
+  - event_title, event_category, event_tags, created_by, creation_date are
+    left blank for manual completion in IRIS.
 
 Timestamp detection order (first match wins, per line):
   1. If the file has an IIS W3C "#Fields:" header, use the declared
@@ -147,7 +151,7 @@ class IISHeaderState:
         return None
 
 
-def process_file(filepath, matchers, rows, needs_review):
+def process_file(filepath, matchers, rows, needs_review, asset=""):
     iis = IISHeaderState()
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
@@ -184,7 +188,7 @@ def process_file(filepath, matchers, rows, needs_review):
                     "event_date_wtz": event_date,
                     "event_category": "",
                     "event_tags": "",
-                    "linked_assets": "",
+                    "linked_assets": (asset + ";") if asset else "",
                     "linked_iocs": ";".join(hits) + ";",
                     "created_by": "",
                     "creation_date": "",
@@ -214,23 +218,32 @@ def main():
     matchers = build_ioc_matchers(iocs)
 
     exclude = {os.path.abspath(args.ioc_file), os.path.abspath(args.output)}
-    files = [
-        os.path.join(args.logs_dir, f)
-        for f in sorted(os.listdir(args.logs_dir))
-        if os.path.isfile(os.path.join(args.logs_dir, f))
-        and os.path.abspath(os.path.join(args.logs_dir, f)) not in exclude
-    ]
-    if not files:
+    logs_dir_abs = os.path.abspath(args.logs_dir)
+
+    # Walk recursively so per-host subfolders (e.g. from copy_from_list.py's
+    # --by-host mode) are picked up. A file directly under --logs-dir has no
+    # host subfolder and gets asset="".
+    files_with_asset = []
+    for root, _dirs, filenames in os.walk(args.logs_dir):
+        for fname in sorted(filenames):
+            fp = os.path.join(root, fname)
+            if os.path.abspath(fp) in exclude:
+                continue
+            rel = os.path.relpath(root, logs_dir_abs)
+            asset = "" if rel == "." else rel.split(os.sep)[0]
+            files_with_asset.append((fp, asset))
+
+    if not files_with_asset:
         print(f"[!] No files found in {args.logs_dir}", file=sys.stderr)
         sys.exit(1)
 
     print(f"[*] Loaded {len(iocs)} IOC(s)")
-    print(f"[*] Scanning {len(files)} file(s) in {args.logs_dir}")
+    print(f"[*] Scanning {len(files_with_asset)} file(s) under {args.logs_dir}")
 
     rows = []
     needs_review = []
-    for fp in files:
-        process_file(fp, matchers, rows, needs_review)
+    for fp, asset in files_with_asset:
+        process_file(fp, matchers, rows, needs_review, asset=asset)
 
     with open(args.output, "w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=IRIS_FIELDS, quoting=csv.QUOTE_ALL)
