@@ -24,13 +24,21 @@ Options:
                 right after the third "/", e.g. /mnt/IOC_SCAN/<hostname>/...).
                 Collisions are only checked within the same host's subfolder.
                 This is the mode to use if you want ioc_log_timeline.py to
-                auto-fill the linked_assets column.
+                auto-fill the event_assets column.
+
+A manifest file (_copy_manifest.csv) is written to the top of --dest on every
+run, mapping each copied file's path back to its original source path. This
+lets ioc_log_timeline.py fill event_source with the ORIGINAL path even
+though it only ever reads the copied files. Don't delete it.
 """
 
 import argparse
+import csv
 import os
 import shutil
 import sys
+
+MANIFEST_NAME = "_copy_manifest.csv"
 
 
 def extract_hostname(path):
@@ -92,6 +100,7 @@ def main():
     copied = 0
     missing = []
     skipped_dirs = []
+    manifest_rows = []  # (copied_path_abs, original_path_abs)
 
     for src in paths:
         if not os.path.exists(src):
@@ -121,7 +130,20 @@ def main():
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(src, dst)
             print(f"[+] {src} -> {dst}")
+            manifest_rows.append((os.path.abspath(dst), os.path.abspath(src)))
         copied += 1
+
+    if manifest_rows and not args.dry_run:
+        manifest_path = os.path.join(args.dest, MANIFEST_NAME)
+        # Append if a manifest already exists (e.g. running this script
+        # multiple times into the same --dest across separate hosts/batches).
+        write_header = not os.path.exists(manifest_path)
+        with open(manifest_path, "a", newline="", encoding="utf-8") as mf:
+            writer = csv.writer(mf)
+            if write_header:
+                writer.writerow(["copied_path", "original_path"])
+            writer.writerows(manifest_rows)
+        print(f"[*] Manifest updated: {manifest_path}")
 
     print(f"\n[*] {copied} file(s) {'would be ' if args.dry_run else ''}copied.")
     if skipped_dirs:
