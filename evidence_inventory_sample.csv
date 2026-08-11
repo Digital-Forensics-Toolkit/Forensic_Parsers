@@ -1,0 +1,6 @@
+filename,file_size,file_hash,type_id,file_description,start_date,end_date
+WKS-042_C_drive.E01,214748364800,3a7bd3e2360a3d29eea436fcfb7e44c8,2,Forensic image of WKS-042 primary volume (C:) acquired via FTK Imager,2026-08-01T09:15:00.000,2026-08-01T11:42:00.000
+WKS-042_MemDump.raw,17179869184,f2ca1bb6c7e907d06dafe4687e579fce,5,Live memory acquisition from WKS-042 via WinPMem,2026-08-01T09:02:00.000,2026-08-01T09:14:00.000
+SRV-DC01_C_drive.E01,536870912000,e99a18c428cb38d5f260853678922e03,2,Forensic image of domain controller SRV-DC01 system volume,2026-08-02T13:00:00.000,2026-08-02T17:30:00.000
+FW-EDGE01_config_backup.tar.gz,52428800,9e107d9d372bb6826bd81d3542a419d6,7,Configuration export and log bundle from edge firewall FW-EDGE01,2026-08-02T18:05:00.000,2026-08-02T18:07:00.000
+Suspect_USB_Drive01.dd,32017047552,c3fcd3d76192e4007dfb496cca67e13b,2,Full disk image of USB drive recovered from suspect workstation,2026-08-03T08:30:00.000,2026-08-03T09:10:00.000
