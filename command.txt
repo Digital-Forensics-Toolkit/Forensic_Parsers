@@ -70,26 +70,5 @@ cs_uri_stem="/_layouts/15/*.aspx"
 
 
 
-Prompt for Copilot
 
-Task: Draft a forensic investigation report documenting the incident on [Customer/Engagement Name], using the attached materials as source input.
-
-Inputs provided:
-
-Raw events/log entries (Word doc) — the primary timeline of activity observed during this engagement.
-Threat intel report — documenting a similar/related attack observed against a different entity, believed to be the same threat actor or campaign. Use this to help interpret ambiguous or incomplete events in our raw log data by cross-referencing known TTPs, tooling, and behavior patterns from that report.
-Background/investigation notes (Word doc) — includes additional case context along with USN Journal entries that support the finding that the threat actor created and subsequently deleted files on the host. This evidence should be explicitly incorporated into the relevant section of the report to support the file creation/deletion narrative.
-Template/example report — use this as the structural and formatting guide for the final output (section headers, tone, level of technical detail, executive summary style, etc.).
-
-Instructions:
-
-Follow the structure, section order, and formatting style of the provided template exactly.
-Use the raw events/log entries as the primary source of truth for the timeline of activity.
-Where an event in our raw data is unclear, ambiguous, or lacks context, cross-reference the threat intel report to determine if similar behavior was documented in the related attack, and use that to inform your interpretation. When you do this, explicitly note where an interpretation was informed by the external threat intel report rather than directly observed in our own data, so we can distinguish confirmed findings from inferred ones.
-Incorporate the USN Journal entries from the background document as supporting evidence for file creation and deletion activity attributed to the threat actor. Cite this evidence specifically in the relevant technical findings section.
-Maintain a clear separation between confirmed findings (directly supported by our raw event data or USN journal evidence) and assessed/inferred findings (based on comparison to the external threat intel report).
-Preserve technical accuracy — do not embellish or speculate beyond what the source documents support.
-Flag any gaps where our raw data does not fully align with the threat intel report, rather than forcing a fit.
-
-Output: A complete draft forensic report following the template structure, ready for technical review and edits.
 | sort -_time
